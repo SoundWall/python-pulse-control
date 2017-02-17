@@ -552,6 +552,72 @@ class LibPulseSimple(object):
 
 	def return_value(self): return pointer(c_int())
 
+class LibPulseSimple(object):
+	# func_def ::= arg_types_list | (arg_types_list, res_spec) | (res_spec, arg_types_list)
+	# res_spec ::= ctypes_restype
+	#  | res_proc_func | (ctypes_restype, res_proc_func)
+	#  | res_spec_name_str | (ctypes_restype, res_spec_name_str)
+	# res_spec_name_str ::= 'int_check_ge0' | 'pa_op' | ...
+	func_defs = dict(
+		pa_simple_new=([c_str_p, c_str_p, c_int, c_str_p, c_str_p, POINTER(PA_SAMPLE_SPEC), POINTER(PA_CHANNEL_MAP), POINTER(PA_BUFFER_ATTR), POINTER(c_int)], POINTER(PA_SIMPLE)),
+		pa_simple_free=([POINTER(PA_SIMPLE)]), 
+		pa_simple_write=([POINTER(PA_SIMPLE), c_void_p, c_size_t, POINTER(c_int)], c_int),
+		pa_simple_drain=([POINTER(PA_SIMPLE), POINTER(c_int)]),
+		pa_simple_read=([POINTER(PA_SIMPLE), c_void_p, c_size_t, POINTER(c_int)], c_int),
+		pa_simple_get_latency=([POINTER(PA_SIMPLE), POINTER(c_int)], c_uint64),
+		pa_simple_flush=([POINTER(PA_SIMPLE), POINTER(c_int)], c_int) )
+
+	class CallError(Exception): pass
+
+	def __init__(self):
+		p = CDLL('libpulse-simple.so.0')
+
+		self.funcs = dict()
+		for k, spec in self.func_defs.items():
+			func, args, res_proc = getattr(p, k), None, None
+			if spec:
+				if not isinstance(spec, tuple): spec = (spec,)
+				for v in spec:
+					assert v, [k, spec, v]
+					if isinstance(v, list): args = v
+					else: res_proc = v
+			func_k = k if not k.startswith('pa_') else k[3:]
+			self.funcs[func_k] = self._func_wrapper(k, func, args, res_proc)
+	
+	def _func_wrapper(self, func_name, func, args=list(), res_proc=None):
+		func.restype, func.argtypes = None, args
+		if isinstance(res_proc, tuple): func.restype, res_proc = res_proc
+		if isinstance(res_proc, str):
+			if res_proc.startswith('int_check_'): func.restype = c_int
+			elif res_proc == 'pa_op': func.restype = POINTER(PA_OPERATION)
+		elif not func.restype and hasattr(res_proc, 'c_type'): func.restype = res_proc.c_type
+		elif not func.restype: func.restype, res_proc = res_proc, None
+
+		def _wrapper(*args):
+			# print('libpulse call:', func_name, args, file=sys.stderr)
+			# sys.stderr.flush()
+			res = func(*args)
+			if isinstance(res_proc, str):
+				assert res_proc in ['int_check_ge0', 'pa_op', 'not_null']
+				if (res_proc == 'int_check_ge0' and res < 0)\
+						or (res_proc == 'pa_op' and not res)\
+						or (res_proc == 'not_null' and not res):
+					err = [func_name, args, res]
+					if args and isinstance(getattr(args[0], 'contents', None), PA_CONTEXT):
+						errno_ = self.context_errno(args[0])
+						err.append('{} [pulse errno {}]'.format(self.strerror(errno_), errno_))
+					else: err.append('Return value check failed: {}'.format(res_proc))
+					raise self.CallError(*err)
+			elif res_proc: res = res_proc(res)
+			return res
+
+		_wrapper.__name__ = 'libpulse-simple.{}'.format(func_name)
+		return _wrapper
+
+	def __getattr__(self, k): return self.funcs[k]
+
+	def return_value(self): return pointer(c_int())
+
 class LibPulse(object):
 
 	# func_def ::= arg_types_list | (arg_types_list, res_spec) | (res_spec, arg_types_list)
