@@ -12,4 +12,4 @@ from .pulsectl import (
 	PulseStateEnum, PulseUpdateEnum, PulsePortAvailableEnum, PulseDirectionEnum,
 
 	PulseError, PulseIndexError, PulseOperationFailed, PulseOperationInvalid,
-	PulseLoopStop, PulseDisconnected, PulseObject, Pulse, connect_to_cli )
+	PulseLoopStop, PulseDisconnected, PulseObject, Pulse, PulseSimple, connect_to_cli )
