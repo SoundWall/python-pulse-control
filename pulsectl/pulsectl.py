@@ -5,6 +5,7 @@ import itertools as it, operator as op, functools as ft
 from collections import defaultdict
 from contextlib import contextmanager
 import os, sys, inspect, traceback
+from ctypes import *
 
 from . import _pulsectl as c
 
@@ -853,3 +854,33 @@ def connect_to_cli(server=None, as_file=True, socket_timeout=1.0, attempts=5, re
 
 	finally:
 		if s: s.close()
+
+class PulseSimple(object):
+	"""
+	Interface to pulse-simple library
+	"""
+	def __init__(self, server=None, client_name="pypulse-simple", direction=c.PA_STREAM_PLAYBACK, device=None, stream_name="simple-stream", format=c.PA_SAMPLE_S16LE, rate=48000, channels=2):
+		self.server = server
+		self.client_name = client_name
+		self.direction = direction
+		self.device = device
+		self.stream_name = stream_name
+		self.format = format
+		self.rate = rate
+		self.channels = channels
+		self.spec = c.PA_SAMPLE_SPEC(format, rate, channels)
+		self.err = 0
+		self.simple = c.pa_simple.simple_new(self.server, self.client_name, c_int(self.direction), self.device, self.stream_name, self.spec, None, None, cast(self.err, POINTER(c_int)))
+
+	def file_playback(self, path):
+		with open(path, 'rb') as f:
+			buf = create_string_buffer(f.read())
+		dataLength = len(buf)
+		data = cast(buf, POINTER(c_uint8))
+		c.pa_simple.simple_write(self.simple, data, dataLength, cast(self.err, POINTER(c_int)))
+		c.pa_simple.simple_drain(self.simple, cast(self.err, POINTER(c_int)))
+		return self.err
+
+	def close(self):
+		c.pa_simple.simple_free(self.simple)
+			
