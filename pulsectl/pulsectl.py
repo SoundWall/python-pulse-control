@@ -844,7 +844,7 @@ class PulseSimple(object):
 	"""
 	Interface to pulse-simple library
 	"""
-	def __init__(self, server=None, client_name="pypulse-simple", direction=c.PA_STREAM_PLAYBACK, device=None, stream_name="simple-stream", format=c.PA_SAMPLE_S16LE, rate=48000, channels=2):
+	def __init__(self, server=None, client_name="pypulse-simple", direction=c.PA_STREAM_PLAYBACK, device=None, stream_name="simple-stream", format=c.PA_SAMPLE_S16LE, rate=44100, channels=2, period_size=None):
 		self.server = server
 		self.client_name = client_name
 		self.direction = direction
@@ -854,18 +854,60 @@ class PulseSimple(object):
 		self.rate = rate
 		self.channels = channels
 		self.spec = c.PA_SAMPLE_SPEC(format, rate, channels)
-		self.err = 0
-		self.simple = c.pa_simple.simple_new(self.server, self.client_name, c_int(self.direction), self.device, self.stream_name, self.spec, None, None, cast(self.err, POINTER(c_int)))
+		self.period_size = period_size if period_size else self.rate / 10
+		self.err = c_int(0)
+		self.simple = None
+
+	def open(self):
+		if self.simple is None:
+			self.simple = c.pa_simple.new(self.server, self.client_name, c_int(self.direction), self.device, self.stream_name, self.spec, None, None, byref(self.err))
 
 	def file_playback(self, path):
 		with open(path, 'rb') as f:
 			buf = create_string_buffer(f.read())
 		dataLength = len(buf)
 		data = cast(buf, POINTER(c_uint8))
-		c.pa_simple.simple_write(self.simple, data, dataLength, cast(self.err, POINTER(c_int)))
-		c.pa_simple.simple_drain(self.simple, cast(self.err, POINTER(c_int)))
+		self.open()
+		c.pa_simple.write(self.simple, data, dataLength, byref(self.err))
+		c.pa_simple.drain(self.simple, byref(self.err))
 		return self.err
 
+	def drain(self):
+		c.pa_simple.drain(self.simple, byref(self.err))
+
 	def close(self):
-		c.pa_simple.simple_free(self.simple)
-			
+		c.pa_simple.free(self.simple)
+
+	def read(self):
+		buf = create_string_buffer(self.period_size)
+		try:
+			c.pa_simple.read(self.simple, byref(buf), self.period_size, byref(self.err))
+		except Exception as e:
+			return None
+		print(len(buf))
+		return buf.raw
+
+	def write(self, data):
+		buf = create_string_buffer(data)
+		dataLength = len(buf)
+		datap = cast(buf, POINTER(c_uint8))
+		c.pa_simple.write(self.simple, datap, dataLength, byref(self.err))
+
+	def file_record(self, path):
+		loop = True
+		self.open()
+		while loop:
+			try:
+				try:
+					buf = self.read()
+				except Exception as e:
+					print("Bad news in simple_read: %s", e)
+					loop = False
+				try:
+					with open(path, 'ab') as f:
+						f.write(buf)
+				except Exception as e:
+					print("Bad news in file write: %s", e)
+					loop = False
+			except KeyboardInterrupt:
+				loop = False
