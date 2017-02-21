@@ -581,7 +581,7 @@ class LibPulseSimple(object):
 					assert v, [k, spec, v]
 					if isinstance(v, list): args = v
 					else: res_proc = v
-			func_k = k if not k.startswith('pa_') else k[3:]
+			func_k = k if not k.startswith('pa_simple_') else k[10:]
 			self.funcs[func_k] = self._func_wrapper(k, func, args, res_proc)
 	
 	def _func_wrapper(self, func_name, func, args=list(), res_proc=None):
