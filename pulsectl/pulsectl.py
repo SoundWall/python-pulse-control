@@ -605,6 +605,35 @@ class Pulse(object):
 		c.pa.context_set_source_port_by_index,
 		lambda port: port.name if isinstance(port, PulsePortInfo) else port )
 
+	def proplist_new(self):
+		return c.pa.proplist_new()
+
+	def proplist_sets(self, proplist, key, value):
+		return c.pa.proplist_sets(proplist, key, value)
+
+	def proplist_gets(self, proplist, key):
+		return c.pa.proplist_gets(proplist, key)
+
+	def play_sample(self, name, dev, volume):
+		name, dev = map(c.force_bytes, [name, dev])
+		with self._pulse_op_cb() as cb:
+			try:
+				c.pa.context_play_sample(self._ctx, name, dev, volume, cb, None)
+			except c.pa.CallError as err: 
+				raise PulseOperationInvalid(err.args[-1])
+
+	def play_sample_with_proplist(self, name, dev, volume, proplist):
+		name, dev = map(c.force_bytes, [name, dev])
+		data = list()
+		with self._pulse_op_cb(raw=True) as cb:
+			cb = c.PA_CONTEXT_PLAY_SAMPLE_CB_T (
+				lambda ctx, index, userdata, cb=cb: data.append(index) or cb() )
+			try:
+				c.pa.context_play_sample_with_proplist(self._ctx, name, dev, volume, proplist, cb, None)
+			except c.pa.CallError as err:
+				raise PulseOperationInvalid(err.args[-1])
+		index, = data
+		return index
 
 	def module_load(self, name, args=''):
 		if is_list(args): args = ' '.join(args)
@@ -884,7 +913,6 @@ class PulseSimple(object):
 			c.pa_simple.read(self.simple, byref(buf), self.period_size, byref(self.err))
 		except Exception as e:
 			return None
-		print(len(buf))
 		return buf.raw
 
 	def write(self, data):
