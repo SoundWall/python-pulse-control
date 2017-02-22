@@ -481,6 +481,10 @@ PA_SUBSCRIBE_CB_T = CFUNCTYPE(c_void_p,
 	c_int,
 	c_void_p)
 
+PA_CONTEXT_PLAY_SAMPLE_CB_T = CFUNCTYPE(c_void_p,
+	POINTER(PA_CONTEXT),
+	c_uint32,
+	c_void_p)
 
 class LibPulseSimple(object):
 	# func_def ::= arg_types_list | (arg_types_list, res_spec) | (res_spec, arg_types_list)
@@ -667,7 +671,13 @@ class LibPulse(object):
 		pa_ext_stream_restore_delete=( 'pa_op',
 			[POINTER(PA_CONTEXT), POINTER(c_char_p), PA_CONTEXT_SUCCESS_CB_T, c_void_p] ),
 		pa_context_set_subscribe_callback=[POINTER(PA_CONTEXT), PA_SUBSCRIBE_CB_T, c_void_p],
+		pa_context_play_sample=('pa_op',
+			[POINTER(PA_CONTEXT), c_str_p, c_str_p, c_uint32, PA_CONTEXT_SUCCESS_CB_T, c_void_p] ),
+		pa_context_play_sample_with_proplist=('pa_op',
+			[POINTER(PA_CONTEXT), c_str_p, c_str_p, c_uint32, POINTER(PA_PROPLIST), PA_CONTEXT_PLAY_SAMPLE_CB_T, c_void_p]),
+		pa_proplist_new=(POINTER(PA_PROPLIST)),
 		pa_proplist_iterate=([POINTER(PA_PROPLIST), POINTER(c_void_p)], c_str_p),
+		pa_proplist_sets=([POINTER(PA_PROPLIST), c_str_p, c_str_p], c_int),
 		pa_proplist_gets=([POINTER(PA_PROPLIST), c_str_p], c_str_p),
 		pa_channel_map_init_mono=(
 			[POINTER(PA_CHANNEL_MAP)], (POINTER(PA_CHANNEL_MAP), 'not_null') ),
