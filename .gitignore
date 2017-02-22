@@ -5,3 +5,4 @@
 *.pyo
 .project
 .pydevproject
+/.settings
