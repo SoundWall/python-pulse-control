@@ -476,7 +476,7 @@ class LibPulseSimple(object):
 	# res_spec_name_str ::= 'int_check_ge0' | 'pa_op' | ...
 	func_defs = dict(
 		pa_simple_new=([c_str_p, c_str_p, c_int, c_str_p, c_str_p, POINTER(PA_SAMPLE_SPEC), POINTER(PA_CHANNEL_MAP), POINTER(PA_BUFFER_ATTR), POINTER(c_int)], POINTER(PA_SIMPLE)),
-		pa_simple_free=([POINTER(PA_SIMPLE)]), 
+		pa_simple_free=[POINTER(PA_SIMPLE)], 
 		pa_simple_write=([POINTER(PA_SIMPLE), c_void_p, c_size_t, POINTER(c_int)], c_int),
 		pa_simple_drain=([POINTER(PA_SIMPLE), POINTER(c_int)]),
 		pa_simple_read=([POINTER(PA_SIMPLE), c_void_p, c_size_t, POINTER(c_int)], c_int),
