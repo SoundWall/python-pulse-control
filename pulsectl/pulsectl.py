@@ -898,13 +898,14 @@ class PulseSimple(object):
 		self.rate = rate
 		self.channels = channels
 		self.spec = c.PA_SAMPLE_SPEC(format, rate, channels)
+		self.buffer_attr = c.PA_BUFFER_ATTR(c.PA_INVALID, c.PA_INVALID, c.PA_INVALID, c.PA_INVALID, period_size)
 		self.period_size = period_size if period_size else self.rate / 10
 		self.err = c_int(0)
 		self.simple = None
 
 	def open(self):
 		if self.simple is None:
-			self.simple = c.pa_simple.new(self.server, self.client_name, c_int(self.direction), self.device, self.stream_name, self.spec, None, None, byref(self.err))
+			self.simple = c.pa_simple.new(self.server, self.client_name, c_int(self.direction), self.device, self.stream_name, self.spec, None, self.buffer_attr, byref(self.err))
 
 	def file_playback(self, path):
 		with open(path, 'rb') as f:
@@ -919,8 +920,12 @@ class PulseSimple(object):
 	def drain(self):
 		c.pa_simple.drain(self.simple, byref(self.err))
 
+	def flush(self):
+		c.pa_simple.flush(self.simple, byref(self.err))
+
 	def close(self):
-		c.pa_simple.free(self.simple)
+		if self.simple:
+			c.pa_simple.free(self.simple)
 
 	def read(self):
 		buf = create_string_buffer(self.period_size)
@@ -931,9 +936,8 @@ class PulseSimple(object):
 		return buf.raw
 
 	def write(self, data):
-		buf = create_string_buffer(data)
-		dataLength = len(buf)
-		datap = cast(buf, POINTER(c_uint8))
+		dataLength = len(data)
+		datap = cast(data, POINTER(c_uint8))
 		c.pa_simple.write(self.simple, datap, dataLength, byref(self.err))
 
 	def file_record(self, path):
