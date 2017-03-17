@@ -348,6 +348,8 @@ class Pulse(object):
 		self._api = c.pa.mainloop_get_api(self._loop)
 
 		self._ctx, self._ret = c.pa.context_new(self._api, self.name), c.pa.return_value()
+		if not self._ctx:
+			raise PulseError('Got a NULL context...uh oh')
 		c.pa.context_set_state_callback(self._ctx, self._pa_state_cb, None)
 
 		c.pa.context_set_subscribe_callback(self._ctx, self._pa_subscribe_cb, None)
@@ -911,6 +913,7 @@ class PulseSimple(object):
 	def close(self):
 		if self.simple:
 			c.pa_simple.free(self.simple)
+		self.simple = None
 
 	def read(self):
 		buf = create_string_buffer(self.period_size)
