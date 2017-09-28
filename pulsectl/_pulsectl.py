@@ -367,6 +367,20 @@ class PA_EXT_STREAM_RESTORE_INFO(Structure):
 		('mute', c_int),
 	]
 
+class PA_SAMPLE_INFO(Structure):
+	_fields_ = [
+		('index', c_uint32),
+		('name', c_char_p),
+		('volume', PA_CVOLUME),
+		('sample_spec', PA_SAMPLE_SPEC),
+		('channel_map', PA_CHANNEL_MAP),
+		('duration', PA_USEC_T),
+		('bytes', c_uint32),
+		('lazy', c_int),
+		('filename', c_char_p),
+		('proplist', POINTER(PA_PROPLIST)),
+	]
+
 class PA_SIMPLE(Structure):
 	_fields_ = [
         ('mainloop', POINTER(PA_THREADED_MAINLOOP)),
@@ -435,6 +449,12 @@ PA_SOURCE_OUTPUT_INFO_CB_T = CFUNCTYPE(c_int,
 PA_SOURCE_INFO_CB_T = CFUNCTYPE(c_int,
 	POINTER(PA_CONTEXT),
 	POINTER(PA_SOURCE_INFO),
+	c_int,
+	c_void_p)
+
+PA_SAMPLE_INFO_CB_T = CFUNCTYPE(c_void_p,
+	POINTER(PA_CONTEXT),
+	POINTER(PA_SAMPLE_INFO),
 	c_int,
 	c_void_p)
 
@@ -596,6 +616,10 @@ class LibPulse(object):
 			[POINTER(PA_CONTEXT), PA_SINK_INFO_CB_T, c_void_p] ),
 		pa_context_get_sink_info_by_index=( 'pa_op',
 			[POINTER(PA_CONTEXT), c_uint32, PA_SINK_INFO_CB_T, c_void_p] ),
+		pa_context_get_sample_info_by_name=( 'pa_op',
+			[POINTER(PA_CONTEXT), c_char_p, PA_SAMPLE_INFO_CB_T, c_void_p] ),
+		pa_context_get_sample_info_list=( 'pa_op',
+			[POINTER(PA_CONTEXT), PA_SAMPLE_INFO_CB_T, c_void_p] ),
 		pa_context_set_sink_mute_by_index=( 'pa_op',
 			[POINTER(PA_CONTEXT), c_uint32, c_int, PA_CONTEXT_SUCCESS_CB_T, c_void_p] ),
 		pa_context_suspend_sink_by_index=( 'pa_op',
@@ -608,6 +632,8 @@ class LibPulse(object):
 			[POINTER(PA_CONTEXT), c_uint32, POINTER(PA_CVOLUME), PA_CONTEXT_SUCCESS_CB_T, c_void_p] ),
 		pa_context_set_sink_input_volume=( 'pa_op',
 			[POINTER(PA_CONTEXT), c_uint32, POINTER(PA_CVOLUME), PA_CONTEXT_SUCCESS_CB_T, c_void_p] ),
+		pa_context_kill_sink_input=( 'pa_op',
+			[POINTER(PA_CONTEXT), c_uint32, PA_CONTEXT_SUCCESS_CB_T, c_void_p] ),
 		pa_context_move_sink_input_by_index=( 'pa_op',
 			[POINTER(PA_CONTEXT), c_uint32, c_uint32, PA_CONTEXT_SUCCESS_CB_T, c_void_p] ),
 		pa_context_get_source_output_info=( 'pa_op',
@@ -675,6 +701,7 @@ class LibPulse(object):
 		pa_proplist_iterate=([POINTER(PA_PROPLIST), POINTER(c_void_p)], c_str_p),
 		pa_proplist_sets=([POINTER(PA_PROPLIST), c_str_p, c_str_p], c_int),
 		pa_proplist_gets=([POINTER(PA_PROPLIST), c_str_p], c_str_p),
+		pa_proplist_copy=([POINTER(PA_PROPLIST)], POINTER(PA_PROPLIST)),
 		pa_channel_map_init_mono=(
 			[POINTER(PA_CHANNEL_MAP)], (POINTER(PA_CHANNEL_MAP), 'not_null') ),
 		pa_channel_map_init_stereo=(
