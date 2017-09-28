@@ -210,6 +210,46 @@ class PulseSinkInputInfo(PulseObject):
 	def __str__(self):
 		return self._as_str(fields='index name mute')
 
+class PulseSampleInfo(PulseObject):
+	c_struct_fields = ( 'index name volume sample_spec'
+		' channel_map duration bytes lazy filename proplist' )
+
+	def _init_from_struct(self, struct):
+		self.__proplist = None
+		try:
+			self.__proplist = c.pa.proplist_copy(struct.proplist)
+		except Exception as e:
+			self.__proplist = c.pa.proplist_new()
+
+	def get_media_role(self):
+		role = c.pa.proplist_gets(self.__proplist, 'media.role')
+		return role
+
+	def set_media_role(self, role):
+		c.pa.proplist_sets(self.__proplist, 'media.role', role)
+
+	media_role = property(get_media_role, set_media_role)
+
+	def get_media_priority(self):
+		try:
+			priority = int(c.pa.proplist_gets(self.__proplist, 'media.priority'))
+		except Exception:
+			priority = 0
+		return priority
+
+	def set_media_priority(self, priority):
+		priority = str(priority)
+		c.pa.proplist_sets(self.__proplist, 'media.priority', c.force_bytes(priority))
+
+	media_priority = property(get_media_priority, set_media_priority)
+
+	@property
+	def raw_proplist(self):
+		return self.__proplist
+
+	def __str__(self):
+		return self._as_str(fields='index name duration')
+
 class PulseSourceInfo(PulseObject):
 	c_struct_fields = ( 'index name mute'
 		' description sample_spec owner_module latency driver monitor_of_sink'
@@ -540,6 +580,13 @@ class Pulse(object):
 		c.PA_SOURCE_OUTPUT_INFO_CB_T,
 		c.pa.context_get_source_output_info, PulseSourceOutputInfo )
 
+	sample_list = _pulse_get_list( 
+		c.PA_SAMPLE_INFO_CB_T,
+		c.pa.context_get_sample_info_list, PulseSampleInfo )
+	get_sample = _pulse_get_list(
+		c.PA_SAMPLE_INFO_CB_T,
+		c.pa.context_get_sample_info_by_name, PulseSampleInfo )
+
 	sink_list = _pulse_get_list(
 		c.PA_SINK_INFO_CB_T, c.pa.context_get_sink_info_list, PulseSinkInfo )
 	sink_info = _pulse_get_list(
@@ -601,6 +648,9 @@ class Pulse(object):
 		c.pa.context_set_sink_input_mute, lambda mute=True: mute )
 	sink_input_move = _pulse_method_call(
 		c.pa.context_move_sink_input_by_index, lambda sink_index: sink_index )
+
+	sink_input_kill = _pulse_method_call( c.pa.context_kill_sink_input )
+
 	sink_mute = _pulse_method_call(
 		c.pa.context_set_sink_mute_by_index, lambda mute=True: mute )
 	sink_input_volume_set = _pulse_method_call(
@@ -632,21 +682,42 @@ class Pulse(object):
 	def proplist_new(self):
 		return c.pa.proplist_new()
 
+	def proplist_copy(self, proplist):
+		return c.pa.proplist_copy(proplist)
+
 	def proplist_sets(self, proplist, key, value):
 		return c.pa.proplist_sets(proplist, key, value)
 
 	def proplist_gets(self, proplist, key):
 		return c.pa.proplist_gets(proplist, key)
 
-	def play_sample(self, name, dev, volume):
-		name, dev = map(c.force_bytes, [name, dev])
-		with self._pulse_op_cb() as cb:
-			try:
-				c.pa.context_play_sample(self._ctx, name, dev, volume, cb, None)
-			except c.pa.CallError as err: 
-				raise PulseOperationInvalid(err.args[-1])
+	def play_sample(self, name_or_obj, media_role=None, media_priority=0, dev=None, volume=c.PA_VOLUME_INVALID):
+		data = list()
+		proplist = None
+		if isinstance(name_or_obj, PulseSampleInfo):
+			name = c.force_bytes(name_or_obj.name)
+			proplist = name_or_obj.raw_proplist
+		elif is_str(name_or_obj):
+			name = c.force_bytes(name_or_obj)
+			proplist = c.pa.proplist_new()
+		else:
+			raise PulseOperationInvalid('Must provide name or PulseSampleInfo at least')
 
-	def play_sample_with_proplist(self, name, dev, volume, proplist):
+		if dev is not None:
+			dev = c.force_bytes(dev)
+
+		with self._pulse_op_cb(raw=True) as cb:
+			cb = c.PA_CONTEXT_PLAY_SAMPLE_CB_T (
+				lambda ctx, index, userdata, cb=cb: data.append(index) or cb() )
+			try:
+				c.pa.context_play_sample_with_proplist(self._ctx, name, dev, volume, proplist, cb, None)
+			except c.pa.CallError as err:
+				raise PulseOperationInvalid(err.args[-1])
+		index, = data
+
+		return index
+
+	def play_sample_with_proplist(self, name, proplist, dev=None, volume=c.PA_VOLUME_INVALID):
 		name, dev = map(c.force_bytes, [name, dev])
 		data = list()
 		with self._pulse_op_cb(raw=True) as cb:
@@ -658,6 +729,18 @@ class Pulse(object):
 				raise PulseOperationInvalid(err.args[-1])
 		index, = data
 		return index
+
+	def get_sample_by_name(self, name):
+		name = c.force_bytes(name)
+		data = list()
+		with self._pulse_op_cb(raw=True) as cb:
+			cb = c.PA_SAMPLE_INFO_CB_T( lambda ctx, sample_info, eol, userdata, cb=cb: data.append(sample_info) or cb() )
+			try:
+				c.pa.context_get_sample_info_by_name(self._ctx, name, cb, None)
+			except c.pa.CallError as err:
+				raise PulseOperationInvalid(err.args[-1])
+		info, = data
+		return info
 
 	def module_load(self, name, args=''):
 		if is_list(args): args = ' '.join(args)
